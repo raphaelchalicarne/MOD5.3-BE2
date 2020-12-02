@@ -53,26 +53,28 @@ def calcul_lpc(data, samplerate, ordre, taille_fenetre=0.02):
     taille_decalage = taille_data_fenetre//2
     taille_data = data.shape[0]
     taille_mat_lpc = taille_data//taille_decalage
-    matrice_lpc = np.zeros((ordre, taille_decalage))
+    matrice_lpc = np.zeros((taille_mat_lpc, ordre))
     for k in range(taille_mat_lpc):
         fenetre_inf = k*taille_decalage
         fenetre_sup = fenetre_inf + taille_data_fenetre
-        matrice_lpc[:,k] = calcul_lpc_fenetre(data[fenetre_inf:fenetre_sup], ordre).T
+        lpc = calcul_lpc_fenetre(data[fenetre_inf:fenetre_sup], ordre)
+        lpc = lpc.ravel()
+        matrice_lpc[k] = lpc
     return matrice_lpc
 
 if __name__ == '__main__':
     ordre_modele = 10
-    filename = genere_nom(3, 0, 0)
+    # filename = genere_nom(3, 0, 0)
+    filename = genere_nom(5,3,2)
     samplerate, data = wav.read(filename)
-    # length = data.shape[0] / samplerate
-    # time = np.linspace(0., length, data.shape[0])
-    # plt.plot(time, data, label=filename)
-    # plt.legend()
-    # plt.xlabel("Time [s]")
-    # plt.ylabel("Amplitude")
-    # plt.show()
+    length = data.shape[0] / samplerate
+    time = np.linspace(0., length, data.shape[0])
+    plt.plot(time, data, label=filename)
+    plt.legend()
+    plt.xlabel("Time [s]")
+    plt.ylabel("Amplitude")
+    plt.show()
     
-    # lpc = calcul_lpc_fenetre(data[0:1600], ordre_modele)
     matrice_lpc = calcul_lpc(data, samplerate, ordre_modele)
-    
+    plt.plot(matrice_lpc)
     
