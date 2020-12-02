@@ -77,20 +77,46 @@ def distance_element_a_element(matrice_lpc_1, matrice_lpc_2):
 
 def distance_elastique(matrice_lpc_1, matrice_lpc_2):
     cout_vert = 1 #correspond a w_v
-    couvt_horiz = 1 #correspond a w_h
+    cout_horiz = 1 #correspond a w_h
     cout_diag = 1 #correspond a w_d
     matrice_distance = distance_element_a_element(matrice_lpc_1, matrice_lpc_2)
+    taille1, taille2 = np.shape(matrice_distance)
+    matrice_distance_elastique = np.zeros((taille1, taille2))
     
+    #initialisation premier element
+    matrice_distance_elastique[0,0] = matrice_distance[0,0]
+    #initialisation colonne 1
+    for i in range(1,taille1):
+        matrice_distance_elastique[i,0] = matrice_distance_elastique[i-1,0] + cout_vert*matrice_distance[i,0]
+    #initialisation ligne 1
+    for j in range(1,taille2):
+        matrice_distance_elastique[0,j] = matrice_distance_elastique[0,j-1] + cout_horiz*matrice_distance[0,j]
 
+    # remplissage du reste
+    for i in range(1,taille1):
+        for j in range(1,taille2):
+            chemin_vert = matrice_distance_elastique[i-1,j] + cout_vert*matrice_distance[i,j]
+            chemin_horiz = matrice_distance_elastique[i,j-1] + cout_horiz*matrice_distance[i,j]
+            chemin_diag = matrice_distance_elastique[i-1,j-1] + cout_diag*matrice_distance[i,j]
+            matrice_distance_elastique[i,j] = min(chemin_vert, chemin_horiz, chemin_diag)
+    return matrice_distance_elastique[-1,-1] /(taille1+taille2)
 
 #%% test
 nbr_prononce = 5
-locuteur=liste_nom[3]
+locuteur=liste_nom[0]
 essai = 2
 
 N = 10
-chemin = genere_nom(nbr_prononce, locuteur, essai)
-samplerate, data = wav.read(chemin)
+chemin1 = genere_nom(nbr_prononce, locuteur, essai)
+chemin2 = genere_nom(5, liste_nom[0], 2)
+samplerate1, data1 = wav.read(chemin1)
+samplerate2, data2 = wav.read(chemin2)
+if data1.ndim > 1 :
+    data1 = data1[:,0]
+    
 #print(np.shape(calcul_coeff_lpc_fenetre(data[0:160], 10)))
-#print(np.shape(calcul_lpc(samplerate, data, 10)))
-affichage(chemin)
+matrice1 =calcul_lpc(samplerate1, data1, 10)
+matrice2 =calcul_lpc(samplerate2, data2, 10)
+truc_a_print = distance_elastique(matrice1, matrice2)
+print(truc_a_print)
+#affichage(chemin)
