@@ -60,6 +60,29 @@ def calcul_lpc(samplerate, data, ordre_modele, taille_fenetre=0.02): #taille fen
         coeff_lpc_matrix.append(calcul_coeff_lpc_fenetre(data_fenetre, ordre_modele)[:,0])
     return np.array(coeff_lpc_matrix)
 
+def distance_element_a_element(matrice_lpc_1, matrice_lpc_2):
+    """
+    on considere la matrice 1 en colonne et matrice 2 en ligne
+    on calcule la distance euclidienne entre chaque vecteur colonne des deux matrices
+    """
+    taille1, taille2 = np.shape(matrice_lpc_1)[0], np.shape(matrice_lpc_2)[0]
+    matrice_distance = np.zeros((taille1, taille2))
+    for i in range(taille1):
+        elt1 = matrice_lpc_1[i,:]
+        for j in range(taille2):
+            elt2 = matrice_lpc_2[j,:]
+            distance = np.sqrt(np.sum((elt1-elt2)**2))
+            matrice_distance[i,j] = distance
+    return matrice_distance
+
+def distance_elastique(matrice_lpc_1, matrice_lpc_2):
+    cout_vert = 1 #correspond a w_v
+    couvt_horiz = 1 #correspond a w_h
+    cout_diag = 1 #correspond a w_d
+    matrice_distance = distance_element_a_element(matrice_lpc_1, matrice_lpc_2)
+    
+
+
 #%% test
 nbr_prononce = 5
 locuteur=liste_nom[3]
