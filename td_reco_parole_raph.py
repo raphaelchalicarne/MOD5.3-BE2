@@ -62,19 +62,35 @@ def calcul_lpc(data, samplerate, ordre, taille_fenetre=0.02):
         matrice_lpc[k] = lpc
     return matrice_lpc
 
+def calcul_matrice_distances_lpc(mat_lpc_1, mat_lpc_2):
+    nb_elements_1, ordre = mat_lpc_1.shape
+    nb_elements_2, _ = mat_lpc_2.shape
+    mat_distances = np.zeros((nb_elements_1, nb_elements_2))
+    for i in range(nb_elements_1):
+        for j in range(nb_elements_2):
+            mat_distances[i,j] = np.sqrt(((mat_lpc_1[i]-mat_lpc_2[j])**2).sum())
+    return mat_distances
+
 if __name__ == '__main__':
     ordre_modele = 10
     # filename = genere_nom(3, 0, 0)
-    filename = genere_nom(5,3,2)
-    samplerate, data = wav.read(filename)
-    length = data.shape[0] / samplerate
-    time = np.linspace(0., length, data.shape[0])
-    plt.plot(time, data, label=filename)
-    plt.legend()
-    plt.xlabel("Time [s]")
-    plt.ylabel("Amplitude")
-    plt.show()
+    filename_532 = genere_nom(5,3,2)
+    filename_533 = genere_nom(5,3,3)
+    samplerate_532, data_532 = wav.read(filename_532)
+    samplerate_533, data_533 = wav.read(filename_533)
+
+    # length = data.shape[0] / samplerate
+    # time = np.linspace(0., length, data.shape[0])
+    # plt.plot(time, data, label=filename)
+    # plt.legend()
+    # plt.xlabel("Time [s]")
+    # plt.ylabel("Amplitude")
+    # plt.show()
     
-    matrice_lpc = calcul_lpc(data, samplerate, ordre_modele)
-    plt.plot(matrice_lpc)
+    matrice_lpc_532 = calcul_lpc(data_532, samplerate_532, ordre_modele)
+    matrice_lpc_533 = calcul_lpc(data_533, samplerate_533, ordre_modele)
+    distances_532_533 = calcul_matrice_distances_lpc(matrice_lpc_532, matrice_lpc_533)
+
+    
+    
     
