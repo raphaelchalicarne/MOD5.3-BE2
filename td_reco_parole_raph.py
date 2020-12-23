@@ -151,7 +151,7 @@ def plot_lpc(nbr_prononce, index_locuteur, essai, ordre_modele=10):
     ax.set_xlabel("Frame")
     ax.set_ylabel(r"Coefficient $a_{i}$")
     x = np.arange(-0.5, taille_mat_lpc, 1)
-    y = np.arange(0.5, ordre_modele+1, 1)  # len = 11
+    y = np.arange(0.5, ordre_modele+1, 1)
     lpc_plot = ax.pcolormesh(x, y, matrice_lpc.T)
     fig.colorbar(lpc_plot, ax=ax)
     return None
@@ -171,34 +171,54 @@ def calcul_matrice_distances_lpc(mat_lpc_1, mat_lpc_2):
     mat_distances : numpy array
         Matrice de distance euclidienne entre chaque frame des matrices des coefficients LPC de deux signaux audio.
         La valeur en i,j correspond à la distance euclidienne entre la frame i de mat_lpc_1 et la frame j de mat_lpc_2.
+    distance_elastique : float
+        Distance cumulée minimale du chemin entre la distance en (0,0) et la distance en (-1,-1).
     """
     nb_elements_1, ordre = mat_lpc_1.shape
     nb_elements_2, _ = mat_lpc_2.shape
     mat_distances = np.zeros((nb_elements_1, nb_elements_2))
+    distance_min = np.zeros((nb_elements_1, nb_elements_2))
     for i in range(nb_elements_1):
         for j in range(nb_elements_2):
             mat_distances[i, j] = np.sqrt(
                 ((mat_lpc_1[i]-mat_lpc_2[j])**2).sum())
-    return mat_distances
+            if i==0 or j==0:
+                distance_min[i,j] = mat_distances[i, j]
+            else:
+                distance_min[i,j] = mat_distances[i, j] + np.min(
+                [distance_min[i-1, j-1], distance_min[i-1, j], distance_min[i, j-1]])
+    distance_elastique = distance_min[-1, -1]
+    
+    fig = plt.figure()
+    ax = fig.add_subplot(111)
+    ax.set_title("Distance frame à frame entre les deux signaux")
+    ax.set_xlabel("Frames du premier signal")
+    ax.set_ylabel("Frames du second signal")
+    distance_plot = ax.pcolormesh(mat_distances)
+    fig.colorbar(distance_plot, ax=ax)
+
+    fig = plt.figure()
+    ax = fig.add_subplot(111)
+    ax.set_title("Distance minimale cumulée entre les deux signaux")
+    ax.set_xlabel("Frames du premier signal")
+    ax.set_ylabel("Frames du second signal")
+    distance_min_plot = ax.pcolormesh(distance_min)
+    fig.colorbar(distance_min_plot, ax=ax)
+    
+    return mat_distances, distance_elastique
 
 
 if __name__ == '__main__':
     ordre_modele = 10
-    # filename = genere_nom(3, 0, 0)
     filename_532 = genere_nom(5, 3, 2)
     filename_533 = genere_nom(5, 3, 3)
     samplerate_532, data_532 = wav.read(filename_532)
     samplerate_533, data_533 = wav.read(filename_533)
 
-    # length = data.shape[0] / samplerate
-    # time = np.linspace(0., length, data.shape[0])
-    # plt.plot(time, data, label=filename)
-    # plt.legend()
-    # plt.xlabel("Time [s]")
-    # plt.ylabel("Amplitude")
-    # plt.show()
-
     matrice_lpc_532 = calcul_lpc(data_532, samplerate_532, ordre_modele)
     matrice_lpc_533 = calcul_lpc(data_533, samplerate_533, ordre_modele)
-    distances_532_533 = calcul_matrice_distances_lpc(
+    mat_distances_532_533, distance_532_533 = calcul_matrice_distances_lpc(
         matrice_lpc_532, matrice_lpc_533)
+
+    plot_lpc(5, 3, 2)
+    plot_lpc(5, 3, 3)
