@@ -401,7 +401,7 @@ if __name__ == '__main__':
     # np.save('index_essais', index_essais)
 
     ##### Partie 4 #####
-    # matrices_lpc_loc3 = np.load('matrices_lpc_loc3.npy')
-    # index_essais = np.load('index_essais.npy')
+    # matrices_lpc_loc3 = np.load('matrices_lpc_loc3.npy', allow_pickle=True)
+    # index_essais = np.load('index_essais.npy', allow_pickle=True)
     classe_kppv_3 = calcul_kppv_locuteur(matrices_lpc_loc3, index_essais, index_locuteur=i_locuteur)
     np.save('classe_kppv_3', classe_kppv_3)
