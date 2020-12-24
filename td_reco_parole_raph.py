@@ -14,7 +14,7 @@ import matplotlib.pyplot as plt
 import time as time
 
 # %% Paramètres globaux
-np.random.seed(13)
+np.random.seed(3)
 chemin = "spoken_digit_dataset/"
 locuteurs = ["jackson", "jason", "nicolas", "theo"]
 
@@ -54,6 +54,27 @@ def plot_signal(nbr_prononce, index_locuteur, essai):
     plt.show()
 
     return None
+
+def normalize(data):
+    """
+    Parameters
+    ----------
+    data : numpy array
+        Signal audio obtenu avec la fonction `wav.read` de scipy.
+
+    Returns
+    -------
+    data : numpy array
+        Même signal, normalisé pour avoir une amplitude maximale de 1000 (en valeur absolue).
+
+    """
+    # On calcule uniquement la valeur absolue des valeurs extrêmes, 
+    # plutôt que d'utiliser np.abs qui est probablement plus gourmand en temps de calcul.
+    data_max_value = np.max(data)
+    data_min_value = np.min(data)
+    data_greater_abs_value = np.max([data_max_value, -data_min_value])
+    data = data*(1000/data_greater_abs_value)
+    return data
 
 
 def calcul_lpc_fenetre(fenetre, ordre):
@@ -276,6 +297,12 @@ def matrices_lpc_locuteur(index_locuteur=0, nbr_essais=5, ordre_modele=10):
             for i_essai, essai in enumerate(index_essais):
                 filename = genere_nom(nbr_prononce, locuteur, essai)
                 samplerate, data = wav.read(filename)
+                
+                # Les données sont normalisées en amplitude, 
+                # car selon les amplitudes diffèrent selon les locuteurs, 
+                # ce qui affecte le calcul des distances.
+                data = normalize(data)
+                
                 # On peut retrouver à chaque ligne la matrice LPC correspondant à un nombre prononcé
                 # Chaque colonne correspond d'abord à un locuteur, puis au numéro de l'enregistrement considéré
                 matrices_lpc[nbr_prononce, i_locuteur*nbr_essais +
@@ -321,6 +348,11 @@ def calcul_kppv_locuteur(matrices_lpc, index_essais, index_locuteur=0, ordre_mod
             filename_test = genere_nom(
                 nbr_prononce_test, index_locuteur, essai_test)
             samplerate_test, data_test = wav.read(filename_test)
+            
+            # Les données sont normalisées en amplitude, 
+            # car selon les amplitudes diffèrent selon les locuteurs, 
+            # ce qui affecte le calcul des distances.
+            data_test = normalize(data_test)
             # Cette matrice des coefficients LPC sera comparée à toutes les matrices témoins.
             mat_lpc_test = calcul_lpc(data_test, samplerate_test, ordre_modele)
 
