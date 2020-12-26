@@ -14,7 +14,7 @@ import matplotlib.pyplot as plt
 import time as time
 
 # %% Paramètres globaux
-np.random.seed(3)
+np.random.seed(7)
 chemin = "spoken_digit_dataset/"
 locuteurs = ["jackson", "jason", "nicolas", "theo"]
 
@@ -45,6 +45,7 @@ def genere_nom(nbr_prononce, index_locuteur, essai):
 def plot_signal(nbr_prononce, index_locuteur, essai):
     filename = genere_nom(nbr_prononce, index_locuteur, essai)
     samplerate, data = wav.read(filename)
+    data = normalize(data)
     length = data.shape[0] / samplerate
     time = np.linspace(0., length, data.shape[0])
     plt.plot(time, data, label=filename)
@@ -55,8 +56,12 @@ def plot_signal(nbr_prononce, index_locuteur, essai):
 
     return None
 
+
 def normalize(data):
     """
+    Les données sont normalisées en amplitude, car les amplitudes 
+    diffèrent selon les locuteurs, ce qui affecte le calcul des distances.
+
     Parameters
     ----------
     data : numpy array
@@ -68,7 +73,7 @@ def normalize(data):
         Même signal, normalisé pour avoir une amplitude maximale de 1000 (en valeur absolue).
 
     """
-    # On calcule uniquement la valeur absolue des valeurs extrêmes, 
+    # On calcule uniquement la valeur absolue des valeurs extrêmes,
     # plutôt que d'utiliser np.abs qui est probablement plus gourmand en temps de calcul.
     data_max_value = np.max(data)
     data_min_value = np.min(data)
@@ -165,6 +170,7 @@ def plot_lpc(nbr_prononce, index_locuteur, essai, ordre_modele=10):
     """
     filename = genere_nom(nbr_prononce, index_locuteur, essai)
     samplerate, data = wav.read(filename)
+    data = normalize(data)
     matrice_lpc = calcul_lpc(data, samplerate, ordre_modele)
     taille_mat_lpc = matrice_lpc.shape[0]
 
@@ -263,7 +269,7 @@ def calcul_distance_01_loc0(matrices_lpc):
                 matrices_lpc[nbr_prononce_i, essai_i], matrices_lpc[nbr_prononce_j, essai_j])
             distances_matrices_lpc[i, j] = distance_ij
     return distances_matrices_lpc
-# %%
+# %% Fonctions permettant de calculer la distance des signaux d'un locuteur aux signaux des autres locuteurs
 
 
 def matrices_lpc_locuteur(index_locuteur=0, nbr_essais=5, ordre_modele=10):
@@ -287,8 +293,9 @@ def matrices_lpc_locuteur(index_locuteur=0, nbr_essais=5, ordre_modele=10):
     t0 = time.time()
 
     range_4 = np.arange(4)
-    locuteurs = range_4[range_4 != index_locuteur] #Liste des index des locuteurs "témoin"
-    #Liste des index des enregistrements considérés pour chaque locuteur et chaque nombre prononcé
+    # Liste des index des locuteurs "témoin"
+    locuteurs = range_4[range_4 != index_locuteur]
+    # Liste des index des enregistrements considérés pour chaque locuteur et chaque nombre prononcé
     index_essais = np.random.choice(50, nbr_essais, replace=False)
 
     matrices_lpc = np.empty((10, 3*nbr_essais), dtype=object)
@@ -297,12 +304,12 @@ def matrices_lpc_locuteur(index_locuteur=0, nbr_essais=5, ordre_modele=10):
             for i_essai, essai in enumerate(index_essais):
                 filename = genere_nom(nbr_prononce, locuteur, essai)
                 samplerate, data = wav.read(filename)
-                
-                # Les données sont normalisées en amplitude, 
-                # car selon les amplitudes diffèrent selon les locuteurs, 
+
+                # Les données sont normalisées en amplitude,
+                # car selon les amplitudes diffèrent selon les locuteurs,
                 # ce qui affecte le calcul des distances.
                 data = normalize(data)
-                
+
                 # On peut retrouver à chaque ligne la matrice LPC correspondant à un nombre prononcé
                 # Chaque colonne correspond d'abord à un locuteur, puis au numéro de l'enregistrement considéré
                 matrices_lpc[nbr_prononce, i_locuteur*nbr_essais +
@@ -315,7 +322,7 @@ def matrices_lpc_locuteur(index_locuteur=0, nbr_essais=5, ordre_modele=10):
 
 def calcul_kppv_locuteur(matrices_lpc, index_essais, index_locuteur=0, ordre_modele=10):
     """
-    
+
 
     Parameters
     ----------
@@ -348,9 +355,9 @@ def calcul_kppv_locuteur(matrices_lpc, index_essais, index_locuteur=0, ordre_mod
             filename_test = genere_nom(
                 nbr_prononce_test, index_locuteur, essai_test)
             samplerate_test, data_test = wav.read(filename_test)
-            
-            # Les données sont normalisées en amplitude, 
-            # car selon les amplitudes diffèrent selon les locuteurs, 
+
+            # Les données sont normalisées en amplitude,
+            # car selon les amplitudes diffèrent selon les locuteurs,
             # ce qui affecte le calcul des distances.
             data_test = normalize(data_test)
             # Cette matrice des coefficients LPC sera comparée à toutes les matrices témoins.
@@ -369,7 +376,7 @@ def calcul_kppv_locuteur(matrices_lpc, index_essais, index_locuteur=0, ordre_mod
                     distances[nbr_prononce,
                               i_essai_temoin] = distance_test_temoin
 
-            if i_essai_test==0:
+            if i_essai_test == 0:
                 fig = plt.figure()
                 ax = fig.add_subplot(111)
                 ax.set_title("Distances de la matrice" + str(nbr_prononce_test) +
@@ -397,7 +404,160 @@ def calcul_kppv_locuteur(matrices_lpc, index_essais, index_locuteur=0, ordre_mod
           "{0:.2f}".format(time.time()-t0), "secondes")
     return classe_kppv
 
+# %% Fonctions permettant de classifier les enregistrements d'un locuteur par
+# rapport à un autre locuteur
 
+def matrices_lpc_locuteur_unique(index_locuteur=0, nbr_essais=10, ordre_modele=10):
+    """
+    Parameters
+    ----------
+    index_locuteur : int
+        Index du locuteur dont on va calculer les matrices de distance.
+    nbr_essais : int
+        Nombre de signaux sélectionnés par nombre prononcé.
+
+    Returns
+    -------
+    matrices_lpc : numpy array
+        Matrice contenant la matrice des coefficients LPC de chaque signal témoin.
+    index_essais : numpy array
+        Liste des des essais considérés pour les signaux.
+
+    """
+    t0 = time.time()
+
+    # Liste des index des enregistrements considérés pour chaque locuteur et chaque nombre prononcé
+    index_essais = np.random.choice(50, nbr_essais, replace=False)
+
+    matrices_lpc = np.empty((10, nbr_essais), dtype=object)
+    for nbr_prononce in range(10):
+        for i_essai, essai in enumerate(index_essais):
+            filename = genere_nom(nbr_prononce, index_locuteur, essai)
+            samplerate, data = wav.read(filename)
+
+            # Les données sont normalisées en amplitude,
+            # car selon les amplitudes diffèrent selon les locuteurs,
+            # ce qui affecte le calcul des distances.
+            data = normalize(data)
+
+            # On peut retrouver à chaque ligne la matrice LPC correspondant à un nombre prononcé
+            # Chaque colonne correspond d'abord à un locuteur, puis au numéro de l'enregistrement considéré
+            matrices_lpc[nbr_prononce, i_essai] = calcul_lpc(
+                data, samplerate, ordre_modele)
+
+    print("Temps de calcul matrices LPC :",
+          "{0:.2f}".format(time.time()-t0), "secondes")
+    return matrices_lpc, index_essais
+
+
+def classification_kppv_locuteur(matrices_lpc_temoin, matrices_lpc_test, index_essais_temoin, index_essais_test, index_locuteur, ordre_modele=10):
+    """
+
+
+    Parameters
+    ----------
+    matrices_lpc_temoin : numpy array
+        Matrice contenant la matrice des coefficients LPC de chaque signal témoin.
+    matrices_lpc_test : numpy array
+        Matrice contenant la matrice des coefficients LPC de chaque signal test.
+    index_essais_temoin : numpy array
+        Liste des des essais considérés pour les signaux témoin.
+    index_essais_test : numpy array
+        Liste des des essais considérés pour les signaux test.
+    index_locuteur : int
+        Index du locuteur (test) dont on va calculer les matrices de distance.
+    ordre_modele : int, optional
+        Ordre du modèle de prédiction linéaire LPC. Correspond au nombre de
+        frames que l'on souhaite considérer pour prédire le signal. 
+        La valeur par défaut est 10.
+
+    Returns
+    -------
+    classe_kppv : numpy array
+        Matrice donnant la classe calculée (nombre que l'on suppose avoir été prononcé)
+        avec en ligne le nombre réellement prononcé (valeur témoin)
+        et en colonne l'enregistrement considéré.
+
+    """
+    t0 = time.time()
+
+    classe_kppv = np.zeros((10, len(index_essais_test)), dtype="int8")
+    # On itère selon les enregistrements du locuteur test.
+    for nbr_prononce_test in range(10):
+        for i_essai_test, essai_test in enumerate(index_essais_test):
+            # Cette matrice des coefficients LPC sera comparée à toutes les matrices témoins.
+            mat_lpc_test = matrices_lpc_test[nbr_prononce_test, i_essai_test]
+
+            # Cette matrice contient la distance entre `mat_lpc_test` et la matrice témoin.
+            # On retrouve en abcisse le locuteur et le numéro d'enregistrement, et en ordonnée le numéro prononcé.
+            distances = np.zeros((10, len(index_essais_temoin)))
+
+            # On itère selon les enregistrements des locuteurs témoin.
+            for nbr_prononce in range(10):
+                for i_essai_temoin in range(len(index_essais_temoin)):
+                    mat_lpc_temoin = matrices_lpc_temoin[nbr_prononce,
+                                                         i_essai_temoin]
+                    distance_test_temoin = calcul_matrice_distances_lpc(
+                        mat_lpc_test, mat_lpc_temoin)
+                    distances[nbr_prononce,
+                              i_essai_temoin] = distance_test_temoin
+
+            if i_essai_test == 0:
+                fig = plt.figure()
+                ax = fig.add_subplot(111)
+                ax.set_title("Distances de la matrice " +
+                             str(nbr_prononce_test) + '_' + str(index_locuteur) + '_' + str(essai_test))
+                ax.set_xlabel(r"Essai $i$")
+                ax.set_ylabel("Nombre prononcé")
+                distances_plot = ax.pcolormesh(distances)
+                fig.colorbar(distances_plot, ax=ax)
+
+            # 10% des distances sont inférieures à `percentile_10_pourcents`.
+            percentile_10_pourcents = np.percentile(distances, 10)
+            # Liste des classes où la distance est inférieure au premier décile.
+            classes_distances_min = np.where(
+                distances < percentile_10_pourcents)[0]
+            (values, counts) = np.unique(
+                classes_distances_min, return_counts=True)
+            index_classe_argmax = np.argmax(counts)
+            # Classe pour laquelle le plus de distances sont inférieures au premier décile.
+            # On considère qu'il s'agit du nombre prononcé dans le signal test.
+            classe = values[index_classe_argmax]
+
+            classe_kppv[nbr_prononce_test, i_essai_test] = classe
+
+    print("Temps de calcul classe_kppv :",
+          "{0:.2f}".format(time.time()-t0), "secondes")
+    return classe_kppv
+
+
+def verif_classe_kppv(classe_kppv):
+    """
+    Parameters
+    ----------
+    classe_kppv : numpy array
+        Matrice donnant la classe calculée (nombre que l'on suppose avoir été prononcé)
+        avec en ligne le nombre réellement prononcé (valeur témoin)
+        et en colonne l'enregistrement considéré.
+
+    Returns
+    -------
+    sum_classe_ok : int
+        Nombre d'enregistrements dont la classe a été correctement détectée.
+
+    """
+    nbr_essais = classe_kppv.shape[1]
+    nbr_enregistrements = 10*nbr_essais
+
+    sum_classe_ok = 0
+    for nbr_prononce in range(10):
+        sum_classe_ok += np.sum(classe_kppv[nbr_prononce] == nbr_prononce)
+    print(str(sum_classe_ok) + '/' + str(nbr_enregistrements) + ' enregistrements ont été correctement calculés, soit ' +
+          "{0:.2f}".format(sum_classe_ok*100/nbr_enregistrements) + "%")
+    return sum_classe_ok
+
+
+# %% Main
 if __name__ == '__main__':
     ordre_modele = 10
     ##### Partie 1 #####
@@ -427,13 +587,37 @@ if __name__ == '__main__':
     # fig.colorbar(distance_lpc_plot, ax=ax)
 
     ##### Partie 3 #####
-    i_locuteur = 0
-    matrices_lpc_loc3, index_essais = matrices_lpc_locuteur(index_locuteur=i_locuteur, nbr_essais=5)
+    # i_locuteur = 0
+    # matrices_lpc_loc3, index_essais = matrices_lpc_locuteur(index_locuteur=i_locuteur, nbr_essais=5)
     # np.save('matrices_lpc_loc3', matrices_lpc_loc3) # Save the numpy array to a npy file.
     # np.save('index_essais', index_essais)
 
     ##### Partie 4 #####
     # matrices_lpc_loc3 = np.load('matrices_lpc_loc3.npy', allow_pickle=True)
     # index_essais = np.load('index_essais.npy', allow_pickle=True)
-    classe_kppv_3 = calcul_kppv_locuteur(matrices_lpc_loc3, index_essais, index_locuteur=i_locuteur)
-    np.save('classe_kppv_3', classe_kppv_3)
+    # classe_kppv_3 = calcul_kppv_locuteur(matrices_lpc_loc3, index_essais, index_locuteur=i_locuteur)
+    # np.save('classe_kppv_3', classe_kppv_3)
+
+    ###### Partie 5 ##### Comparaison des signaux d'un locuteur aux signaux d'un autre locuteur
+    ordre_modele = 3
+    matrices_lpc_jackson, index_essais_temoin = matrices_lpc_locuteur_unique(
+        index_locuteur=0, nbr_essais=20, ordre_modele=ordre_modele)
+    matrices_lpc_theo, index_essais_test = matrices_lpc_locuteur_unique(
+        index_locuteur=3, nbr_essais=5, ordre_modele=ordre_modele)
+
+    # Classification des enregistrements de Théo par rapport à ceux de Jackson
+    index_locuteur = 3
+    classe_kppv_theo = classification_kppv_locuteur(
+        matrices_lpc_jackson, matrices_lpc_theo, index_essais_temoin, index_essais_test, index_locuteur, ordre_modele=ordre_modele)
+    verif_classe_kppv(classe_kppv_theo)
+
+    # Classification des enregistrements de Jackson par rapport à ceux de Theo
+    matrices_lpc_theo, index_essais_temoin = matrices_lpc_locuteur_unique(
+        index_locuteur=3, nbr_essais=20, ordre_modele=ordre_modele)
+    matrices_lpc_jackson, index_essais_test = matrices_lpc_locuteur_unique(
+        index_locuteur=0, nbr_essais=5, ordre_modele=ordre_modele)
+
+    index_locuteur = 0
+    classe_kppv_jackson = classification_kppv_locuteur(
+        matrices_lpc_theo, matrices_lpc_jackson, index_essais_temoin, index_essais_test, index_locuteur, ordre_modele=ordre_modele)
+    verif_classe_kppv(classe_kppv_jackson)
