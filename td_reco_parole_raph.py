@@ -407,6 +407,7 @@ def calcul_kppv_locuteur(matrices_lpc, index_essais, index_locuteur=0, ordre_mod
 # %% Fonctions permettant de classifier les enregistrements d'un locuteur par
 # rapport à un autre locuteur
 
+
 def matrices_lpc_locuteur_unique(index_locuteur=0, nbr_essais=10, ordre_modele=10):
     """
     Parameters
@@ -556,6 +557,91 @@ def verif_classe_kppv(classe_kppv):
           "{0:.2f}".format(sum_classe_ok*100/nbr_enregistrements) + "%")
     return sum_classe_ok
 
+# %% Comparaison des enregistrements d'un locuteur à d'autres enregistrements du même locuteur
+
+
+def all_matrices_lpc_locuteur_unique(index_locuteur, ordre_modele=10):
+    t0 = time.time()
+
+    matrices_lpc = np.empty((10, 50), dtype=object)
+    for nbr_prononce in range(10):
+        for i_essai in range(50):
+            filename = genere_nom(nbr_prononce, index_locuteur, i_essai)
+            samplerate, data = wav.read(filename)
+
+            # Les données sont normalisées en amplitude,
+            # car selon les amplitudes diffèrent selon les locuteurs,
+            # ce qui affecte le calcul des distances.
+            data = normalize(data)
+
+            # On peut retrouver à chaque ligne la matrice LPC correspondant à un nombre prononcé
+            # Chaque colonne correspond d'abord à un locuteur, puis au numéro de l'enregistrement considéré
+            matrices_lpc[nbr_prononce, i_essai] = calcul_lpc(
+                data, samplerate, ordre_modele)
+
+    print("Temps de calcul matrices LPC locuteur " + locuteurs[index_locuteur] + " :",
+          "{0:.2f}".format(time.time()-t0), "secondes")
+    return matrices_lpc
+
+
+def classification_kppv_meme_locuteur(matrices_lpc_locuteur, nbr_essais_test, index_locuteur=0, ordre_modele=10):
+    t0 = time.time()
+
+    classe_kppv = np.zeros((10, nbr_essais_test), dtype="int8")
+
+    # Liste des index des enregistrements à classer pour chaque nombre prononcé
+    index_essais_test = np.random.choice(50, nbr_essais_test, replace=False)
+    print("index_essais_test : ", index_essais_test)
+    index_essais_temoin = np.setdiff1d(np.arange(50), index_essais_test)
+
+    # On itère selon les enregistrements du locuteur test.
+    for nbr_prononce_test in range(10):
+        for i_essai_test, essai_test in enumerate(index_essais_test):
+            # Cette matrice des coefficients LPC sera comparée à toutes les matrices témoins.
+            mat_lpc_test = matrices_lpc_locuteur[nbr_prononce_test, essai_test]
+
+            # Cette matrice contient la distance entre `mat_lpc_test` et la matrice témoin.
+            # On retrouve en abcisse le locuteur et le numéro d'enregistrement, et en ordonnée le numéro prononcé.
+            distances = np.zeros((10, 50-nbr_essais_test))
+
+            # On itère selon les enregistrements des locuteurs témoin.
+            for nbr_prononce in range(10):
+                for i_essai_temoin, essai_temoin in enumerate(index_essais_temoin):
+                    mat_lpc_temoin = matrices_lpc_locuteur[nbr_prononce,
+                                                           essai_temoin]
+                    distance_test_temoin = calcul_matrice_distances_lpc(
+                        mat_lpc_test, mat_lpc_temoin)
+                    distances[nbr_prononce,
+                              i_essai_temoin] = distance_test_temoin
+
+            if i_essai_test == 0:
+                fig = plt.figure()
+                ax = fig.add_subplot(111)
+                ax.set_title("Distances de la matrice " +
+                             str(nbr_prononce_test) + '_' + str(index_locuteur) + '_' + str(essai_test))
+                ax.set_xlabel(r"Essai $i$")
+                ax.set_ylabel("Nombre prononcé")
+                distances_plot = ax.pcolormesh(distances)
+                fig.colorbar(distances_plot, ax=ax)
+
+            # 10% des distances sont inférieures à `percentile_10_pourcents`.
+            percentile_10_pourcents = np.percentile(distances, 10)
+            # Liste des classes où la distance est inférieure au premier décile.
+            classes_distances_min = np.where(
+                distances < percentile_10_pourcents)[0]
+            (values, counts) = np.unique(
+                classes_distances_min, return_counts=True)
+            index_classe_argmax = np.argmax(counts)
+            # Classe pour laquelle le plus de distances sont inférieures au premier décile.
+            # On considère qu'il s'agit du nombre prononcé dans le signal test.
+            classe = values[index_classe_argmax]
+
+            classe_kppv[nbr_prononce_test, i_essai_test] = classe
+
+    print("Temps de calcul classe_kppv :",
+          "{0:.2f}".format(time.time()-t0), "secondes")
+    return classe_kppv
+
 
 # %% Main
 if __name__ == '__main__':
@@ -598,26 +684,86 @@ if __name__ == '__main__':
     # classe_kppv_3 = calcul_kppv_locuteur(matrices_lpc_loc3, index_essais, index_locuteur=i_locuteur)
     # np.save('classe_kppv_3', classe_kppv_3)
 
-    ###### Partie 5 ##### Comparaison des signaux d'un locuteur aux signaux d'un autre locuteur
+    # Partie 5 ##### Comparaison des signaux d'un locuteur aux signaux d'un autre locuteur
+    # ordre_modele = 3
+    # matrices_lpc_jackson, index_essais_temoin = matrices_lpc_locuteur_unique(
+    #     index_locuteur=0, nbr_essais=20, ordre_modele=ordre_modele)
+    # matrices_lpc_theo, index_essais_test = matrices_lpc_locuteur_unique(
+    #     index_locuteur=3, nbr_essais=5, ordre_modele=ordre_modele)
+
+    # # Classification des enregistrements de Théo par rapport à ceux de Jackson
+    # index_locuteur = 3
+    # classe_kppv_theo = classification_kppv_locuteur(
+    #     matrices_lpc_jackson, matrices_lpc_theo, index_essais_temoin, index_essais_test, index_locuteur, ordre_modele=ordre_modele)
+    # verif_classe_kppv(classe_kppv_theo)
+
+    # # Classification des enregistrements de Jackson par rapport à ceux de Theo
+    # matrices_lpc_theo, index_essais_temoin = matrices_lpc_locuteur_unique(
+    #     index_locuteur=3, nbr_essais=20, ordre_modele=ordre_modele)
+    # matrices_lpc_jackson, index_essais_test = matrices_lpc_locuteur_unique(
+    #     index_locuteur=0, nbr_essais=5, ordre_modele=ordre_modele)
+
+    # index_locuteur = 0
+    # classe_kppv_jackson = classification_kppv_locuteur(
+    #     matrices_lpc_theo, matrices_lpc_jackson, index_essais_temoin, index_essais_test, index_locuteur, ordre_modele=ordre_modele)
+    # verif_classe_kppv(classe_kppv_jackson)
+
+    # Partie 6 ##### Classification des enregistrements d'un locuteur par
+    # rapport à d'autres enregistrements du même locuteur.
     ordre_modele = 3
-    matrices_lpc_jackson, index_essais_temoin = matrices_lpc_locuteur_unique(
-        index_locuteur=0, nbr_essais=20, ordre_modele=ordre_modele)
-    matrices_lpc_theo, index_essais_test = matrices_lpc_locuteur_unique(
-        index_locuteur=3, nbr_essais=5, ordre_modele=ordre_modele)
+    i_locuteur = 0
+    print("Ordre du modèle : " + str(ordre_modele))
+    print("Classification des enregistrements de " +
+          locuteurs[i_locuteur] + " par rapport à d'autres enregistrements du même locuteur.")
+    matrices_lpc_jackson = all_matrices_lpc_locuteur_unique(
+        index_locuteur=i_locuteur, ordre_modele=ordre_modele)
+    classe_kppv_jackson_vs_jackson = classification_kppv_meme_locuteur(
+        matrices_lpc_jackson, 10, index_locuteur=i_locuteur, ordre_modele=ordre_modele)
+    verif_classe_kppv(classe_kppv_jackson_vs_jackson)
 
-    # Classification des enregistrements de Théo par rapport à ceux de Jackson
-    index_locuteur = 3
-    classe_kppv_theo = classification_kppv_locuteur(
-        matrices_lpc_jackson, matrices_lpc_theo, index_essais_temoin, index_essais_test, index_locuteur, ordre_modele=ordre_modele)
-    verif_classe_kppv(classe_kppv_theo)
+    i_locuteur = 3
+    print("Ordre du modèle : " + str(ordre_modele))
+    print("Classification des enregistrements de " +
+          locuteurs[i_locuteur] + " par rapport à d'autres enregistrements du même locuteur.")
+    matrices_lpc_theo = all_matrices_lpc_locuteur_unique(
+        index_locuteur=i_locuteur, ordre_modele=ordre_modele)
+    classe_kppv_theo_vs_theo = classification_kppv_meme_locuteur(
+        matrices_lpc_theo, 10, index_locuteur=i_locuteur, ordre_modele=ordre_modele)
+    verif_classe_kppv(classe_kppv_theo_vs_theo)
 
-    # Classification des enregistrements de Jackson par rapport à ceux de Theo
-    matrices_lpc_theo, index_essais_temoin = matrices_lpc_locuteur_unique(
-        index_locuteur=3, nbr_essais=20, ordre_modele=ordre_modele)
-    matrices_lpc_jackson, index_essais_test = matrices_lpc_locuteur_unique(
-        index_locuteur=0, nbr_essais=5, ordre_modele=ordre_modele)
 
-    index_locuteur = 0
-    classe_kppv_jackson = classification_kppv_locuteur(
-        matrices_lpc_theo, matrices_lpc_jackson, index_essais_temoin, index_essais_test, index_locuteur, ordre_modele=ordre_modele)
-    verif_classe_kppv(classe_kppv_jackson)
+    # Ordre 5
+    i_locuteur = 3
+    ordre_modele = 5
+    print("Ordre du modèle : " + str(ordre_modele))
+    print("Classification des enregistrements de " +
+          locuteurs[i_locuteur] + " par rapport à d'autres enregistrements du même locuteur.")
+    matrices_lpc_theo_5 = all_matrices_lpc_locuteur_unique(
+        index_locuteur=i_locuteur, ordre_modele=ordre_modele)
+    classe_kppv_theo_vs_theo_5 = classification_kppv_meme_locuteur(
+        matrices_lpc_theo_5, 10, index_locuteur=i_locuteur, ordre_modele=ordre_modele)
+    verif_classe_kppv(classe_kppv_theo_vs_theo_5)
+    
+    # Ordre 1
+    i_locuteur = 3
+    ordre_modele = 1
+    print("Ordre du modèle : " + str(ordre_modele))
+    print("Classification des enregistrements de " +
+          locuteurs[i_locuteur] + " par rapport à d'autres enregistrements du même locuteur.")
+    matrices_lpc_theo_1 = all_matrices_lpc_locuteur_unique(
+        index_locuteur=i_locuteur, ordre_modele=ordre_modele)
+    classe_kppv_theo_vs_theo_1 = classification_kppv_meme_locuteur(
+        matrices_lpc_theo_1, 10, index_locuteur=i_locuteur, ordre_modele=ordre_modele)
+    verif_classe_kppv(classe_kppv_theo_vs_theo_1)
+    
+    # Ordre 10
+    i_locuteur = 3
+    ordre_modele = 10
+    print("Ordre du modèle : " + str(ordre_modele))
+    print("Classification des enregistrements de " +
+          locuteurs[i_locuteur] + " par rapport à d'autres enregistrements du même locuteur.")
+    matrices_lpc_theo_10 = all_matrices_lpc_locuteur_unique(
+        index_locuteur=i_locuteur, ordre_modele=ordre_modele)
+    classe_kppv_theo_vs_theo_10 = classification_kppv_meme_locuteur(
+        matrices_lpc_theo_10, 10, index_locuteur=i_locuteur, ordre_modele=ordre_modele)
+    verif_classe_kppv(classe_kppv_theo_vs_theo_10)
